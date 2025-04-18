@@ -15,6 +15,7 @@ PLLaVA_ROOT = None
 RBDash_ROOT = None
 VITA_ROOT = None
 LLAVA_V1_7B_MODEL_PTH = "Please set your local path to LLaVA-7B-v1.1 here, the model weight is obtained by merging LLaVA delta weight based on vicuna-7b-v1.1 in https://github.com/haotian-liu/LLaVA/blob/main/docs/MODEL_ZOO.md with vicuna-7b-v1.1. "
+Quicksviewer_ROOT = None
 
 video_models = {
     "Video-LLaVA-7B": partial(VideoLLaVA, model_path="LanguageBind/Video-LLaVA-7B"),
@@ -44,6 +45,9 @@ video_models = {
     "PLLaVA-34B": partial(
         PLLaVA, model_path="ermu2001/pllava-34b", dir_root=PLLaVA_ROOT
     ),
+    "Quicksviewer": partial(
+        Quicksviewer, model_path="/user/qiji/checkpoints/llavacube-qwen2_5fpq-0.6anneal-stage2_0328/checkpoint-15408", dir_root=Quicksviewer_ROOT
+    )
 }
 
 ungrouped = {
