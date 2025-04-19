@@ -24,6 +24,8 @@ import transformers
 from ...dataset import DATASET_TYPE, DATASET_MODALITY
 from .utils import IGNORE_INDEX, IMAGE_TOKEN_INDEX, DEFAULT_IMAGE_TOKEN
 from .modeling import load_pretrained_model
+from .utils import build_multi_choice_prompt, build_qa_cot_prompt, build_mcq_cot_prompt
+from .utils import extract_characters_regex
 
 
 def is_multimodal(name):
@@ -144,6 +146,66 @@ class Quicksviewer(BaseModel):
         self.model.tie_weights()
 
 
+    def use_custom_prompt(self, dataset):
+        assert dataset is not None
+        if listinstr(['MMDU', 'MME-RealWorld', 'MME-RealWorld-CN', 'WeMath_COT', 'MMAlignBench'], dataset):
+            # For Multi-Turn we don't have custom prompt
+            return False
+        if DATASET_MODALITY(dataset) == 'VIDEO':
+            # For Video benchmarks we don't have custom prompt at here
+            return False
+        else:
+            return True
+
+    def build_prompt(self, line, dataset=None):
+
+        assert self.use_custom_prompt(dataset)
+        assert dataset is None or isinstance(dataset, str)
+        tgt_path = self.dump_image(line, dataset)
+
+        if dataset is not None and DATASET_TYPE(dataset) == 'Y/N':
+            question = line['question']
+            if listinstr(['MME'], dataset):
+                prompt = question + ' Answer the question using a single word or phrase.'
+            elif listinstr(['HallusionBench', 'AMBER'], dataset):
+                prompt = question + ' Please answer yes or no. Answer the question using a single word or phrase.'
+            else:
+                prompt = question
+        elif dataset is not None and DATASET_TYPE(dataset) == 'MCQ':
+            prompt = build_multi_choice_prompt(line, dataset)
+            if os.getenv('USE_COT') == '1':
+                prompt = build_mcq_cot_prompt(line, prompt, self.cot_prompt)
+        elif dataset is not None and DATASET_TYPE(dataset) == 'VQA':
+            question = line['question']
+            if listinstr(['LLaVABench', 'WildVision'], dataset):
+                prompt = question + '\nAnswer this question in detail.'
+            elif listinstr(['OCRVQA', 'TextVQA', 'ChartQA', 'DocVQA', 'InfoVQA', 'OCRBench',
+                            'DUDE', 'SLIDEVQA', 'GQA', 'MMLongBench_DOC'], dataset):
+                prompt = question + '\nAnswer the question using a single word or phrase.'
+            elif listinstr(['MathVista', 'MathVision', 'VCR', 'MTVQA', 'MMVet', 'MathVerse',
+                            'MMDU', 'CRPE', 'MIA-Bench', 'MM-Math', 'DynaMath', 'QSpatial',
+                            'WeMath', 'LogicVista'], dataset):
+                prompt = question
+                if os.getenv('USE_COT') == '1':
+                    prompt = build_qa_cot_prompt(line, prompt, self.cot_prompt)
+            else:
+                prompt = question + '\nAnswer the question using a single word or phrase.'
+        else:
+            # VQA_ex_prompt: OlympiadBench, VizWiz
+            prompt = line['question']
+            if os.getenv('USE_COT') == '1':
+                prompt = build_qa_cot_prompt(line, prompt, self.cot_prompt)
+
+        # message = [dict(type='text', value=prompt)]
+        message = [dict(type='image', value=s) for s in tgt_path]
+        message.extend([dict(type='text', value=prompt)])
+
+        # if use_mpo_prompt:
+        #     message = build_mpo_prompt(message, line, dataset)
+        return message
+
+
+
 
     def generate_inner(self, message, dataset=None):
         """
@@ -183,8 +245,13 @@ class Quicksviewer(BaseModel):
                 llm_device=torch.device(f'cuda:0')
                 # llm_device=torch.device(f'cuda:0') if args.vpm_device!=args.llm_device else None
             )
-        print(outputs)
         outputs = outputs[0]
+        
+        # Post-process outputs
+        if dataset is not None and DATASET_TYPE(dataset) == 'MCQ':
+            outputs = extract_characters_regex(outputs)
+
+        print(outputs)
         return outputs
 
 

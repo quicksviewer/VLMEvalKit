@@ -10,9 +10,11 @@ import requests
 import io
 from io import BytesIO
 import cv2
+import re
 import base64
 
 from . import conversation as conversation_lib
+from ..misc import *
 
 
 
@@ -717,5 +719,91 @@ def get_anyres_image_grid_shape(image_size, grid_pinpoints, patch_size):
     # return width // patch_size, height // patch_size
     return math.ceil(width / patch_size), math.ceil(height / patch_size)
 
+def cn_string(s):
+    import re
+    if re.search(u'[\u4e00-\u9fff]', s):
+        return True
+    return False
 
 
+
+import string
+import pandas as pd
+def build_multi_choice_prompt(line, dataset=None):
+    question = line['question']
+    hint = line['hint'] if ('hint' in line and not pd.isna(line['hint'])) else None
+    if hint is not None:
+        question = hint + '\n' + question
+
+    options = {
+        cand: line[cand]
+        for cand in string.ascii_uppercase
+        if cand in line and not pd.isna(line[cand])
+    }
+    for key, item in options.items():
+        question += f'\n{key}. {item}'
+    prompt = question
+
+    if len(options):
+        prompt += "\nAnswer with the option's letter from the given choices directly."
+    else:
+        prompt += '\nAnswer the question directly.'
+
+    return prompt
+
+
+
+def build_qa_cot_prompt(line, prompt, cot_prompt=None):
+    if cot_prompt is None:
+        cot_prompt = (
+            "Answer the preceding question. The last line of your response should follow this format: "
+            "'Answer: \\boxed{$FINAL_ANSWER}' (without quotes), where 'FINAL_ANSWER' is your conclusion "
+            "based on the reasoning provided. If you are uncertain or the problem is too complex, make "
+            "a reasoned guess based on the information provided. Avoid repeating steps indefinitely—"
+            "provide your best guess even if unsure. Think step by step logically, considering all "
+            "relevant information before answering."
+        )
+    prompt = prompt + '\n' + cot_prompt
+
+    return prompt
+
+def build_mcq_cot_prompt(line, prompt, cot_prompt=None):
+    if cot_prompt is None:
+        cot_prompt = (
+            "Answer the preceding multiple choice question. The last line of your response should follow "
+            "this format: 'Answer: \\boxed{$LETTER}' (without quotes), where LETTER is one of the options. "
+            "If you are uncertain or the problem is too complex, make a reasoned guess based on the "
+            "information provided. Avoid repeating steps indefinitely—provide your best guess even if "
+            "unsure. Think step by step logically, considering all relevant information before answering."
+        )
+    prompt = prompt.replace("Answer with the option's letter from the given choices directly.", '').strip()
+    prompt = prompt + '\n' + cot_prompt
+
+    return prompt
+
+
+
+
+# Copied from: https://github.com/DAMO-NLP-SG/VideoLLaMA2/blob/main/videollama2/eval/eval_video_mcqa_videomme.py
+def extract_characters_regex(s):
+    s = s.strip()
+    answer_prefixes = [
+        "The best answer is",
+        "The correct answer is",
+        "The answer is",
+        "The answer",
+        "The best option is"
+        "The correct option is",
+        "Best answer:"
+        "Best option:",
+        "Answer:"
+    ]
+    for answer_prefix in answer_prefixes:
+        s = s.replace(answer_prefix, "")
+
+    if len(s.split()) > 10 and not re.search("[ABCD]", s):
+        return ""
+    matches = re.search(r'[ABCD]', s)
+    if matches is None:
+        return ""
+    return matches[0]
