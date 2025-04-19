@@ -87,8 +87,8 @@ class Quicksviewer(BaseModel):
     DEFAULT_IMAGE_TOKEN = DEFAULT_IMAGE_TOKEN
     IMAGE_TOKEN_INDEX = -200
 
-    video_nframes = 420
-    video_fps = 1
+    video_nframes = 720
+    video_fps = 5
 
 
     def split_model(self, model_path):
@@ -216,12 +216,16 @@ class Quicksviewer(BaseModel):
         ]
         """
         msgs = [_['value'] for _ in message]
+        if 'TempCompass' in str(dataset):
+            msgs = [msgs[1], msgs[0] + msgs[2]]
+
         msgs = parse_dialogue(msgs)
 
         for rou in msgs:
             values = rou['value']
             values = values if isinstance(values, list) else [values]
             new_values, timestamps = [], None
+            modality = 'text'
             for v in values:
                 if is_image(v):
                     new_values.append(load_image(v))
@@ -229,6 +233,7 @@ class Quicksviewer(BaseModel):
                 elif DATASET_MODALITY(dataset) == 'VIDEO' and is_video(v):
                     frames, timestamps = load_video(v, self.video_nframes, self.video_fps)
                     new_values.append(frames)
+                    modality = 'video'
                 else:
                     new_values.append(v)
             rou['value'] = new_values

@@ -551,7 +551,8 @@ def preprocess_multimodal_video(
             # replace_token = DEFAULT_IMAGE_TOKEN
             # if data_args.mm_use_im_start_end:
             #     replace_token = DEFAULT_IM_START_TOKEN + replace_token + DEFAULT_IM_END_TOKEN
-            sentence["value"] = sentence["value"].replace(DEFAULT_IMAGE_TOKEN, replace_token)
+            if DEFAULT_IMAGE_TOKEN in sentence["value"]:
+                sentence["value"] = sentence["value"].replace(DEFAULT_IMAGE_TOKEN, replace_token)
 
     return sources
 

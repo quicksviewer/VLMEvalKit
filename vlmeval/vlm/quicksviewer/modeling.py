@@ -564,7 +564,7 @@ class Cubing(nn.Module):
             # vid_feats = torch.mean(video, dim=1, keepdim=False)
             z = self.proj_fn(vid_feats) # (bf-1, 2)
             list_z.append(z)
-            print(f"********\n Z after projection: {z.tolist()}\n sp_rank: {self.sp_rank}")
+            # print(f"********\n Z after projection: {z.tolist()}\n sp_rank: {self.sp_rank}")
 
             num_cubes = max(round(bf/FPQ)-1, 1) # -1 to exclude beginning
             # print(f"********\n Number of cubes: {num_cubes} \n sp_rank: {self.sp_rank}")
@@ -596,11 +596,12 @@ class Cubing(nn.Module):
                     video_thumb = vision_tower(forward_n_layers=self.forward_n_layers, forward_nth_embeds = video_thumb)
                     video = video.scatter(0, indexs.view(-1,1,1).repeat(1,*video.shape[1:]), video_thumb)
 
+                bound_feats = video * z_hard.unsqueeze(1).unsqueeze(1) / z_hard.sum().detach().item() # video.shape = (128,576,4096)
                 bound_feats = torch.sum(bound_feats, dim=0, keepdim=True)
                 # SUPPORT for sequence_parallel ! Only add thumbnail feature at the first chunk of sequence_parallel
                 bound_feats = self.thumbnail_fn(bound_feats)
                 vid_feats = torch.cat([bound_feats, vid_feats], 0) # (bf+1, 64, 4096)
-                vid_feats = vid_feats[int(self.sp_rank>0):] # Add thumbnail only at the first chunk
+                # vid_feats = vid_feats[int(self.sp_rank>0):] # Add thumbnail only at the first chunk
                 # debug_feats = vid_feats
 
             list_feats.append(vid_feats)
